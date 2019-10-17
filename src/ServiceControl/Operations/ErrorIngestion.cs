@@ -17,6 +17,11 @@
 
         public async Task Start()
         {
+            if (IsRunning)
+            {
+                return;
+            }
+
             var rawConfiguration = rawEndpointFactory.CreateRawEndpointConfiguration(
                 settings.ErrorQueue,
                 (messageContext, dispatcher) => errorIngestor.Ingest(messageContext, dispatcher),
@@ -35,7 +40,19 @@
                 .ConfigureAwait(false);
         }
 
-        public Task Stop() => ingestionEndpoint.Stop();
+        public async Task Stop()
+        {
+            if (!IsRunning)
+            {
+                return;
+            }
+
+            await ingestionEndpoint.Stop()
+                .ConfigureAwait(false);
+            ingestionEndpoint = null;
+        }
+
+        public bool IsRunning => ingestionEndpoint != null;
 
         ErrorIngestor errorIngestor;
         Settings settings;

@@ -6,9 +6,10 @@
 
     class ImportFailureCircuitBreaker : IDisposable
     {
-        public ImportFailureCircuitBreaker(CriticalError criticalError)
+        public ImportFailureCircuitBreaker(CriticalError criticalError, ErrorIngestionWatchdog watchdog)
         {
             this.criticalError = criticalError;
+            this.watchdog = watchdog;
             timer = new Timer(_ => FlushHistory(), null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(20));
         }
 
@@ -28,10 +29,12 @@
             if (result > 50)
             {
                 criticalError.Raise("Failed to import too many times", lastException);
+                watchdog.Trigger("Failed to import too many times").GetAwaiter().GetResult();
             }
         }
 
         readonly CriticalError criticalError;
+        readonly ErrorIngestionWatchdog watchdog;
         Timer timer;
         long failureCount;
     }
