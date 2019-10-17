@@ -1,47 +1,86 @@
 ﻿namespace ServiceControl.Operations
 {
+    using System;
+    using System.Threading;
     using System.Threading.Tasks;
+    using NServiceBus;
     using NServiceBus.Raw;
+    using Raven.Client;
     using Recoverability;
     using ServiceBus.Management.Infrastructure.Settings;
 
     class ErrorIngestion
     {
-        public ErrorIngestion(ErrorIngestor errorIngestor, Settings settings, RawEndpointFactory rawEndpointFactory, SatelliteImportFailuresHandler importFailuresHandler)
+        public ErrorIngestion(ErrorIngestor errorIngestor, string errorQueue, RawEndpointFactory rawEndpointFactory, IDocumentStore documentStore, LoggingSettings loggingSettings, Func<string, Exception, Task> onCriticalError)
         {
             this.errorIngestor = errorIngestor;
-            this.settings = settings;
+            this.errorQueue = errorQueue;
             this.rawEndpointFactory = rawEndpointFactory;
-            this.importFailuresHandler = importFailuresHandler;
+            this.onCriticalError = onCriticalError;
+            importFailuresHandler = new SatelliteImportFailuresHandler(documentStore, loggingSettings, onCriticalError);
         }
 
-        public async Task Start()
+        public async Task EnsureStarted()
         {
-            var rawConfiguration = rawEndpointFactory.CreateRawEndpointConfiguration(
-                settings.ErrorQueue,
-                (messageContext, dispatcher) => errorIngestor.Ingest(messageContext, dispatcher),
-                null);
+            await startStopSemaphore.WaitAsync().ConfigureAwait(false);
 
-            rawConfiguration.CustomErrorHandlingPolicy(new ErrorIngestionFaultPolicy(importFailuresHandler));
-
-            var startableRaw = await RawEndpoint.Create(rawConfiguration).ConfigureAwait(false);
-
-            if (settings.ForwardErrorMessages)
+            try
             {
-                await errorIngestor.VerifyCanReachForwardingAddress(settings.ErrorLogQueue, startableRaw).ConfigureAwait(false);
-            }
+                if (ingestionEndpoint != null)
+                {
+                    return; //Already started
+                }
 
-            ingestionEndpoint = await RawEndpoint.Start(rawConfiguration)
-                .ConfigureAwait(false);
+                var rawConfiguration = rawEndpointFactory.CreateRawEndpointConfiguration(
+                    errorQueue,
+                    (messageContext, dispatcher) => errorIngestor.Ingest(messageContext));
+
+                rawConfiguration.Settings.Set("onCriticalErrorAction", (Func<ICriticalErrorContext, Task>)OnCriticalErrorAction);
+
+                rawConfiguration.CustomErrorHandlingPolicy(new ErrorIngestionFaultPolicy(importFailuresHandler));
+
+                var startableRaw = await RawEndpoint.Create(rawConfiguration).ConfigureAwait(false);
+
+                await errorIngestor.Initialize(startableRaw).ConfigureAwait(false);
+
+                ingestionEndpoint = await startableRaw.Start()
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                startStopSemaphore.Release();
+            }
         }
 
-        public Task Stop() => ingestionEndpoint.Stop();
+        Task OnCriticalErrorAction(ICriticalErrorContext ctx) => onCriticalError(ctx.Error, ctx.Exception);
 
+        public async Task EnsureStopped()
+        {
+            await startStopSemaphore.WaitAsync().ConfigureAwait(false);
+
+            try
+            {
+                if (ingestionEndpoint == null)
+                {
+                    return; //Already stopped
+                }
+                var stoppable = ingestionEndpoint;
+                ingestionEndpoint = null;
+                await stoppable.Stop().ConfigureAwait(false);
+            }
+            finally
+            {
+                startStopSemaphore.Release();
+            }
+        }
+
+        SemaphoreSlim startStopSemaphore = new SemaphoreSlim(1);
         ErrorIngestor errorIngestor;
-        Settings settings;
+        string errorQueue;
         RawEndpointFactory rawEndpointFactory;
+        Func<string, Exception, Task> onCriticalError;
         SatelliteImportFailuresHandler importFailuresHandler;
 
-        IReceivingRawEndpoint ingestionEndpoint;
+        volatile IReceivingRawEndpoint ingestionEndpoint;
     }
 }
