@@ -10,6 +10,7 @@
     using NServiceBus;
     using NServiceBus.Features;
     using NServiceBus.Logging;
+    using Operations;
     using Raven.Abstractions.Data;
     using Raven.Client;
     using ServiceBus.Management.Infrastructure.Extensions;
@@ -17,12 +18,13 @@
 
     class EventDispatcher : FeatureStartupTask
     {
-        public EventDispatcher(IDocumentStore store, IDomainEvents domainEvents, CriticalError criticalError, Settings settings, IEnumerable<IEventPublisher> eventPublishers)
+        public EventDispatcher(IDocumentStore store, IDomainEvents domainEvents, CriticalError criticalError, Settings settings, IEnumerable<IEventPublisher> eventPublishers, TransportInterfaceConnection transportInterfaceConnection)
         {
             this.store = store;
             this.criticalError = criticalError;
             this.settings = settings;
             this.eventPublishers = eventPublishers;
+            this.transportInterfaceConnection = transportInterfaceConnection;
             this.domainEvents = domainEvents;
         }
 
@@ -95,6 +97,8 @@
 
             do
             {
+                await transportInterfaceConnection.WaitForConnection(tokenSource.Token).ConfigureAwait(false);
+
                 more = await TryDispatchEventBatch()
                     .ConfigureAwait(false);
 
@@ -202,6 +206,7 @@
         IMessageSession bus;
         CriticalError criticalError;
         IEnumerable<IEventPublisher> eventPublishers;
+        TransportInterfaceConnection transportInterfaceConnection;
         Settings settings;
         ManualResetEventSlim signal = new ManualResetEventSlim();
         IDocumentStore store;

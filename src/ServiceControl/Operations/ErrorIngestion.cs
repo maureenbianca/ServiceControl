@@ -11,12 +11,13 @@
 
     class ErrorIngestion
     {
-        public ErrorIngestion(ErrorIngestor errorIngestor, string errorQueue, RawEndpointFactory rawEndpointFactory, IDocumentStore documentStore, LoggingSettings loggingSettings, Func<string, Exception, Task> onCriticalError)
+        public ErrorIngestion(ErrorIngestor errorIngestor, string errorQueue, RawEndpointFactory rawEndpointFactory, IDocumentStore documentStore, LoggingSettings loggingSettings, Func<string, Exception, Task> onCriticalError, TransportInterfaceConnection transportInterfaceConnection)
         {
             this.errorIngestor = errorIngestor;
             this.errorQueue = errorQueue;
             this.rawEndpointFactory = rawEndpointFactory;
             this.onCriticalError = onCriticalError;
+            this.transportInterfaceConnection = transportInterfaceConnection;
             importFailuresHandler = new SatelliteImportFailuresHandler(documentStore, loggingSettings, onCriticalError);
         }
 
@@ -45,6 +46,7 @@
 
                 ingestionEndpoint = await startableRaw.Start()
                     .ConfigureAwait(false);
+                transportInterfaceConnection.SetConnected();
             }
             finally
             {
@@ -57,6 +59,7 @@
         public async Task EnsureStopped()
         {
             await startStopSemaphore.WaitAsync().ConfigureAwait(false);
+            transportInterfaceConnection.SetDisconnected();
 
             try
             {
@@ -79,6 +82,7 @@
         string errorQueue;
         RawEndpointFactory rawEndpointFactory;
         Func<string, Exception, Task> onCriticalError;
+        TransportInterfaceConnection transportInterfaceConnection;
         SatelliteImportFailuresHandler importFailuresHandler;
 
         volatile IReceivingRawEndpoint ingestionEndpoint;

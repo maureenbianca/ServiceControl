@@ -26,13 +26,14 @@
             BodyStorageFeature.BodyStorageEnricher bodyStorageEnricher,
             IEnrichImportedErrorMessages[] enrichers,
             IFailedMessageEnricher[] failedMessageEnrichers,
-            CriticalErrorHolder criticalErrorHolder
+            CriticalErrorHolder criticalErrorHolder, 
+            TransportInterfaceConnection transportInterfaceConnection
         )
         {
             var announcer = new FailedMessageAnnouncer(domainEvents);
             var persister = new ErrorPersister(documentStore, bodyStorageEnricher, enrichers, failedMessageEnrichers);
             var ingestor = new ErrorIngestor(persister, announcer, settings.ForwardErrorMessages, settings.ErrorLogQueue);
-            var ingestion = new ErrorIngestion(ingestor, settings.ErrorQueue, rawEndpointFactory, documentStore, loggingSettings, OnCriticalError);
+            var ingestion = new ErrorIngestion(ingestor, settings.ErrorQueue, rawEndpointFactory, documentStore, loggingSettings, OnCriticalError, transportInterfaceConnection);
 
             failedImporter = new ImportFailedErrors(documentStore, ingestor, rawEndpointFactory);
 
