@@ -21,7 +21,7 @@ namespace ServiceBus.Management.Infrastructure.Settings
 
         public static bool TryRead(string root, string name, out T value)
         {
-            var fullKey = $"{root}/{name}";
+            var fullKey = $"{root}_{name}";
 
             var environmentValue = Environment.GetEnvironmentVariable(fullKey);
 
