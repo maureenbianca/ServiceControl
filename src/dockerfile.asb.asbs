@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/windows/servercore:1803
+FROM mcr.microsoft.com/dotnet/framework/samples:dotnetapp-windowsservercore-ltsc2019
 
 WORKDIR /servicecontrol
 
@@ -6,11 +6,11 @@ ADD /ServiceControl.Transports.ASBS/bin/Release/net461 .
 ADD /ServiceControl/bin/Release/net461 .
 ADD runcontainer.ps1 .
 
-ENV "ServiceControl/TransportType"="ServiceControl.Transports.ASBS.ASBSTransportCustomization, ServiceControl.Transports.ASBS"
-ENV "ServiceControl/Hostname"="*"
+ENV "ServiceControl_TransportType"="ServiceControl.Transports.ASBS.ASBSTransportCustomization, ServiceControl.Transports.ASBS"
+ENV "ServiceControl_Hostname"="*"
 
-ENV "ServiceControl/DBPath"="C:\\Data\\"
-ENV "ServiceControl/LogPath"="C:\\Logs\\"
+ENV "ServiceControl_DBPath"="C:\\Data\\"
+ENV "ServiceControl_LogPath"="C:\\Logs\\"
 
 EXPOSE 33333
 
