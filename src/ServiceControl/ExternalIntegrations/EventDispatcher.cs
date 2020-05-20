@@ -12,6 +12,7 @@
     using NServiceBus.Logging;
     using Raven.Abstractions.Data;
     using Raven.Client;
+    using Raven.Database.Indexing;
     using ServiceBus.Management.Infrastructure.Extensions;
     using ServiceBus.Management.Infrastructure.Settings;
 
@@ -62,6 +63,7 @@
                 {
                     try
                     {
+                        Logger.Debug("Waiting for signal to dispatch Events");
                         await signal.WaitHandle.WaitOneAsync(tokenSource.Token).ConfigureAwait(false);
                         signal.Reset();
                     }
@@ -91,10 +93,15 @@
 
         async Task DispatchEvents(CancellationToken token)
         {
+            Logger.Debug("Dispatching Events");
+
+            int batchCount = 1;
+
             bool more;
 
             do
             {
+                Logger.Debug($"Event Batch dispatch {batchCount}");
                 more = await TryDispatchEventBatch()
                     .ConfigureAwait(false);
 
@@ -102,9 +109,11 @@
 
                 if (more && !token.IsCancellationRequested)
                 {
+                    Logger.Debug($"Events still need to be processed. Sleeping for 1000ms.");
                     //if there is more events to dispatch we sleep for a bit and then we go again
                     await Task.Delay(1000, CancellationToken.None).ConfigureAwait(false);
                 }
+                batchCount++;
             } while (!token.IsCancellationRequested && more);
         }
 
@@ -121,8 +130,14 @@
 
                 if (awaitingDispatching.Count == 0)
                 {
+                    var indexStale = stats.IndexEtag.CompareTo(latestEtag) < 0;
+
+                    if (indexStale)
+                    {
+                        Logger.Debug("Index is stale, no results were found. Trying again in another batch.");
+                    }
                     // If the index hasn't caught up, try again
-                    return stats.IndexEtag.CompareTo(latestEtag) < 0;
+                    return indexStale;
                 }
 
                 var allContexts = awaitingDispatching.Select(r => r.DispatchContext).ToArray();
@@ -143,7 +158,7 @@
                 {
                     if (Logger.IsDebugEnabled)
                     {
-                        Logger.Debug("Publishing external event on the bus.");
+                        Logger.Debug($"Publishing external event on the bus. {");
                     }
 
                     try
