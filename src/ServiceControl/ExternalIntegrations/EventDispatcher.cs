@@ -25,6 +25,7 @@
             this.settings = settings;
             this.eventPublishers = eventPublishers;
             this.domainEvents = domainEvents;
+            Logger.Debug("Signal nonsignaled.");
         }
 
         protected override Task OnStart(IMessageSession session)
@@ -45,8 +46,10 @@
 
         void OnNext(DocumentChangeNotification documentChangeNotification)
         {
+            Logger.Debug($"DocumentChangeNotification received with Etag {documentChangeNotification.Etag}. Existing Etag {latestEtag}.");
             latestEtag = Etag.Max(documentChangeNotification.Etag, latestEtag);
             signal.Set();
+            Logger.Debug("Signal set.");
         }
 
         void StartDispatcher()
@@ -56,9 +59,11 @@
 
         async Task StartDispatcherTask()
         {
+            Logger.Debug("Starting Dispatcher");
             try
             {
                 await DispatchEvents(tokenSource.Token).ConfigureAwait(false);
+                Logger.Debug("Starting EventDispatcher do while loop");
                 do
                 {
                     try
@@ -66,6 +71,7 @@
                         Logger.Debug("Waiting for signal to dispatch Events");
                         await signal.WaitHandle.WaitOneAsync(tokenSource.Token).ConfigureAwait(false);
                         signal.Reset();
+                        Logger.Debug("Signal reset.");
                     }
                     catch (OperationCanceledException)
                     {
@@ -74,6 +80,7 @@
 
                     await DispatchEvents(tokenSource.Token).ConfigureAwait(false);
                 } while (!tokenSource.IsCancellationRequested);
+                Logger.Debug("Completed EventDispatcher do while loop");
             }
             catch (OperationCanceledException)
             {
@@ -158,7 +165,7 @@
                 {
                     if (Logger.IsDebugEnabled)
                     {
-                        Logger.Debug($"Publishing external event on the bus. {");
+                        Logger.Debug($"Publishing external event on the bus.");
                     }
 
                     try

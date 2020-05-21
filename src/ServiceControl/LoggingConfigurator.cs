@@ -36,6 +36,17 @@ namespace Particular.ServiceControl
                 ArchiveAboveSize = 30 * megaByte
             };
 
+            var eventDispatcherTarget = new FileTarget
+            {
+                ArchiveEvery = FileArchivePeriod.Day,
+                FileName = Path.Combine(loggingSettings.LogPath, "logfile.EventDispatcher.${shortdate}.txt"),
+                ArchiveFileName = Path.Combine(loggingSettings.LogPath, "logfile.EventDispatcher.{#}.txt"),
+                ArchiveNumbering = ArchiveNumberingMode.DateAndSequence,
+                Layout = simpleLayout,
+                MaxArchiveFiles = 14,
+                ArchiveAboveSize = 30 * megaByte
+            };
+
             var ravenFileTarget = new FileTarget
             {
                 ArchiveEvery = FileArchivePeriod.Day,
@@ -57,6 +68,7 @@ namespace Particular.ServiceControl
 
             // There lines don't appear to be necessary.  The rules seem to work without implicitly adding the targets?!?
             nlogConfig.AddTarget("console", consoleTarget);
+            nlogConfig.AddTarget("eventDispatcher", eventDispatcherTarget);
             nlogConfig.AddTarget("debugger", fileTarget);
             nlogConfig.AddTarget("raven", ravenFileTarget);
             nlogConfig.AddTarget("bitbucket", nullTarget);
@@ -75,6 +87,8 @@ namespace Particular.ServiceControl
             {
                 Final = true
             });
+
+            nlogConfig.LoggingRules.Add(new LoggingRule("ServiceControl.ExternalIntegrations.EventDispatcher", LogLevel.Debug, eventDispatcherTarget));
 
             // Defaults
             nlogConfig.LoggingRules.Add(new LoggingRule("*", loggingSettings.LoggingLevel, fileTarget));
