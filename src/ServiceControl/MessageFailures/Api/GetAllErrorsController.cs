@@ -1,5 +1,6 @@
 ﻿namespace ServiceControl.MessageFailures.Api
 {
+    using System;
     using System.Collections.Generic;
     using System.Net;
     using System.Net.Http;
@@ -7,6 +8,7 @@
     using System.Web.Http;
     using Infrastructure.Extensions;
     using Infrastructure.WebApi;
+    using Microsoft.Extensions.Caching.Memory;
     using Raven.Abstractions.Data;
     using Raven.Client;
 
@@ -45,7 +47,32 @@
 
         [Route("errors")]
         [HttpHead]
-        public async Task<HttpResponseMessage> ErrorsHead()
+        public HttpResponseMessage ErrorsHead()
+        {
+            var requestString = GetRequestString("errors", Request);
+
+            return cache.GetOrCreate(requestString, entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+
+                return Task.Run(() => GetErrors()).GetAwaiter().GetResult();
+            });
+        }
+
+        string GetRequestString(string url, HttpRequestMessage request)
+        {
+            var status = request.GetQueryStringValue<string>("status");
+            var modified = request.GetQueryStringValue<string>("modified");
+            var queueAddress = request.GetQueryStringValue<string>("queueaddress");
+
+            var statusString = string.IsNullOrWhiteSpace(status) ? string.Empty : status;
+            var modifiedString = string.IsNullOrWhiteSpace(modified) ? string.Empty : modified;
+            var queueAddressString = string.IsNullOrWhiteSpace(queueAddress) ? string.Empty : queueAddress;
+
+            return $"{url}{statusString}{modifiedString}{queueAddress}";
+        }
+
+        async Task<HttpResponseMessage> GetErrors()
         {
             using (var session = documentStore.OpenAsyncSession())
             {
@@ -124,5 +151,6 @@
         }
 
         readonly IDocumentStore documentStore;
+        static MemoryCache cache = new MemoryCache(new MemoryCacheOptions());
     }
 }
