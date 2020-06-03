@@ -19,13 +19,17 @@
 
         public void OnNext(IndexChangeNotification value)
         {
-            try
+            if (DateTime.Now - timeOfLastUpdated >= TimeSpan.FromSeconds(30))
             {
-                UpdatedCount().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                logging.WarnFormat("Failed to emit MessageFailuresUpdated - {0}", ex);
+                try
+                {
+                    UpdatedCount().GetAwaiter().GetResult();
+                    timeOfLastUpdated = DateTime.Now;
+                }
+                catch (Exception ex)
+                {
+                    logging.WarnFormat("Failed to emit MessageFailuresUpdated - {0}", ex);
+                }
             }
         }
 
@@ -67,6 +71,7 @@
 
         IDocumentStore store;
         IDomainEvents domainEvents;
+        DateTime timeOfLastUpdated = DateTime.MinValue;
         int lastUnresolvedCount, lastArchivedCount;
         ILog logging = LogManager.GetLogger(typeof(FailedMessageViewIndexNotifications));
     }

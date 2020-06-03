@@ -17,13 +17,16 @@
 
         public void OnNext(IndexChangeNotification value)
         {
-            try
+            if (DateTime.Now - timeOfLastUpdated >= TimeSpan.FromSeconds(30))
             {
-                UpdateCount().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                logging.WarnFormat("Failed to emit CustomCheckUpdated - {0}", ex);
+                try
+                {
+                    UpdateCount().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    logging.WarnFormat("Failed to emit CustomCheckUpdated - {0}", ex);
+                }
             }
         }
 
@@ -58,6 +61,7 @@
 
         IDomainEvents domainEvents;
         IDocumentStore store;
+        DateTime timeOfLastUpdated = DateTime.MinValue;
         int lastCount;
         ILog logging = LogManager.GetLogger(typeof(CustomCheckNotifications));
     }
