@@ -12,7 +12,9 @@
     using Recoverability;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.IO;
     using System.Threading.Tasks;
+    using Raven.Client.Documents.Operations.Attachments;
 
 
     class ErrorPersister
@@ -62,6 +64,18 @@
 
             await SaveToDb(message.Headers.UniqueId(), processingAttempt, groups)
                 .ConfigureAwait(false);
+
+            using (var stream = new MemoryStream(message.Body))
+            {
+                await store.Operations.SendAsync(
+                    new PutAttachmentOperation(
+                        FailedMessage.MakeDocumentId(message.Headers.UniqueId()),
+                        "body",
+                        stream,
+                        (string)metadata["ContentType"])
+                ).ConfigureAwait(false);
+            }
+
 
             return failureDetails;
         }
